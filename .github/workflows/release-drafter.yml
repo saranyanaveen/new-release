@@ -64,7 +64,7 @@ jobs:
         echo "NEXT_MAJOR=$major" >> $GITHUB_ENV
         echo "NEXT_MINOR=$minor" >> $GITHUB_ENV
         echo "NEXT_PATCH=$patch" >> $GITHUB_ENV
-    
+
     - name: Increment version based on bump type
       run: |
         # Calculate the next version based on the bump type
