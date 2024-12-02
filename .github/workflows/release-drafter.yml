@@ -1,4 +1,4 @@
-name: Release Notes Generation and Version Bumping
+name: Create Release
 
 on:
   push:
@@ -16,50 +16,39 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v2
 
-    # Step 1: Authenticate GitHub CLI
-    - name: Authenticate GitHub CLI
-      run: gh auth login --with-token <<< "${{ secrets.GITHUB_TOKEN }}"
-
-    # Debug: Check authentication status
-    - name: Verify GitHub CLI authentication
+    - name: Set up GitHub CLI
       run: |
-        gh auth status
+        curl -s https://cli.github.com/install.sh | bash
+        gh auth login --with-token <<< "${{ secrets.GITHUB_TOKEN }}"
 
-    # Step 2: Fetch merged PRs targeting the main branch
     - name: Fetch merged PRs targeting the main branch
       run: |
-        gh pr list --state merged --base main --json title,body,labels
-        pr_data=$(gh pr list --state merged --base main --json title,body,labels)
-        
+        pr_data=$(gh pr list --state merged --base main --json title)
         # Initialize version bump type
         BUMP_TYPE="patch"
-
+    
         # Check PR titles for versioning keywords
         if echo "$pr_data" | grep -iq "major"; then
           BUMP_TYPE="major"
         elif echo "$pr_data" | grep -iq "minor"; then
           BUMP_TYPE="minor"
         fi
-
+    
         echo "BUMP_TYPE=$BUMP_TYPE" >> $GITHUB_ENV
         echo "Determined BUMP_TYPE=$BUMP_TYPE"
 
-    # Step 3: Get latest tag and calculate next version
     - name: Get latest tag and calculate next version
       id: calculate_version
       run: |
         # Fetch all tags
         git fetch --tags
-
-        # Get the latest tag, or use "v0.0.0" if no tags are found
+        
+        # Get the latest tag or use "v0.0.0" as fallback
         LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
-        echo "Latest tag: $LATEST_TAG"
-
-        # Remove the 'v' prefix and split into major, minor, patch
-        VERSION=${LATEST_TAG#v}
+        VERSION=${LATEST_TAG}
         IFS='.' read -r major minor patch <<< "$VERSION"
 
-        # Increment the version based on the bump type
+        # Increment version based on bump type
         if [ "$BUMP_TYPE" = "major" ]; then
           major=$((major + 1))
           minor=0
@@ -71,17 +60,25 @@ jobs:
           patch=$((patch + 1))
         fi
 
-        # Construct the new version
         NEW_VERSION="v$major.$minor.$patch"
         echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_ENV
         echo "Calculated NEW_VERSION=$NEW_VERSION"
 
-    # Step 4: Generate release notes from merged PRs
-    - name: Generate release notes from merged PRs
+    - name: Check if tag exists
+      run: |
+        TAG_EXISTS=$(git tag -l "v$NEW_VERSION")
+        if [ -n "$TAG_EXISTS" ]; then
+          echo "Tag v$NEW_VERSION already exists. Incrementing patch version..."
+          NEW_VERSION="v$(echo $NEW_VERSION | awk -F. -v OFS=. '{$NF++;print}')"
+          echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_ENV
+        else
+          echo "Tag v$NEW_VERSION does not exist. Proceeding with the release."
+        fi
+
+    - name: Generate Release Notes
       run: |
         pr_data=$(gh pr list --state merged --base main --json title,body,labels)
-
-        # Categorize PRs by label and remove duplicates
+        
         categorized_data=$(echo "$pr_data" | jq -r '
           group_by(.labels | map(.name) | flatten | map(select(. == "feature" or . == "bug" or . == "breaking-change"))) |
           map({
@@ -100,9 +97,9 @@ jobs:
         echo "$categorized_data" > release_notes.md
         echo "Release notes generated and saved to release_notes.md."
 
-    # Step 5: Create a GitHub release with the generated release notes
-    - name: Create a GitHub release with the generated release notes
+    - name: Create Release
       run: |
         gh release create $NEW_VERSION release_notes.md --title "Release $NEW_VERSION" --notes-file release_notes.md
       env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Use the GitHub token
+        NEW_VERSION: $NEW_VERSION
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
