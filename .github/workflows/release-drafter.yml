@@ -16,10 +16,21 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v2
 
-    # Step 1: Fetch merged PRs targeting the main branch
+    # Step 1: Authenticate GitHub CLI
+    - name: Authenticate GitHub CLI
+      run: gh auth login --with-token < ${{ secrets.GITHUB_TOKEN }}
+
+    # Debug: Check authentication status
+    - name: Verify GitHub CLI authentication
+      run: |
+        gh auth status
+
+    # Step 2: Fetch merged PRs targeting the main branch
     - name: Fetch merged PRs targeting the main branch
       run: |
+        gh pr list --state merged --base main --json title,body,labels
         pr_data=$(gh pr list --state merged --base main --json title,body,labels)
+        
         # Initialize version bump type
         BUMP_TYPE="patch"
 
@@ -32,10 +43,8 @@ jobs:
 
         echo "BUMP_TYPE=$BUMP_TYPE" >> $GITHUB_ENV
         echo "Determined BUMP_TYPE=$BUMP_TYPE"
-      env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Use the GitHub token
 
-    # Step 2: Get latest tag and calculate next version
+    # Step 3: Get latest tag and calculate next version
     - name: Get latest tag and calculate next version
       id: calculate_version
       run: |
@@ -67,7 +76,7 @@ jobs:
         echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_ENV
         echo "Calculated NEW_VERSION=$NEW_VERSION"
 
-    # Step 3: Generate release notes from merged PRs
+    # Step 4: Generate release notes from merged PRs
     - name: Generate release notes from merged PRs
       run: |
         pr_data=$(gh pr list --state merged --base main --json title,body,labels)
@@ -91,7 +100,7 @@ jobs:
         echo "$categorized_data" > release_notes.md
         echo "Release notes generated and saved to release_notes.md."
 
-    # Step 4: Create a GitHub release with the generated release notes
+    # Step 5: Create a GitHub release with the generated release notes
     - name: Create a GitHub release with the generated release notes
       run: |
         gh release create $NEW_VERSION release_notes.md --title "Release $NEW_VERSION" --notes-file release_notes.md
