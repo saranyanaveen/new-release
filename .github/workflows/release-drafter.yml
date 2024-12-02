@@ -2,11 +2,11 @@ name: Create Release
 
 on:
   push:
-    branches:
-      - main
+    tags:
+      - '*'  # Trigger on new tags being pushed
   pull_request:
     branches:
-      - main
+      - main  # Trigger when PR is merged into main
 
 jobs:
   release:
@@ -114,11 +114,12 @@ jobs:
           "## " + .category + "\n" + .notes
         ')
 
+        # Write the categorized release notes to a file
         echo "$categorized_data" > release_notes.md
         echo "Release notes generated and saved to release_notes.md."
 
     - name: Create Release
-      if: github.event_name == 'push' # Only create release on merge to main
+      if: github.event_name == 'push'  # Only create release on merge to main with a new tag
       run: |
         # Ensure the tag is not already created before creating the release
         TAG_EXISTS=$(git tag -l "v$NEXT_MAJOR.$NEXT_MINOR.$NEXT_PATCH")
