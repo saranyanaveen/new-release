@@ -119,6 +119,7 @@ jobs:
         echo "Release notes generated and saved to release_notes.md."
 
     - name: Create Release
+      if: github.event_name == 'push' # Only create release on merge to main
       run: |
         # Ensure the tag is not already created before creating the release
         TAG_EXISTS=$(git tag -l "v$NEXT_MAJOR.$NEXT_MINOR.$NEXT_PATCH")
