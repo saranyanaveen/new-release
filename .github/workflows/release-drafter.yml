@@ -25,7 +25,7 @@ jobs:
     - name: Get merged PR data
       run: |
         # Fetch the merged PRs with title and labels
-        pr_data=$(gh pr list --state merged --base main --json title,labels,mergedAt)
+        pr_data=$(gh pr list --state merged --base main --json title,labels)
 
         echo "PR Data: $pr_data"
 
@@ -51,22 +51,20 @@ jobs:
     - name: Get latest tag version
       id: get_version
       run: |
-        # Fetch all tags to ensure the latest tag is included
-        git fetch --tags
-        
         # Get the latest tag (fallback to v0.0.0 if no tags exist)
-        LATEST_TAG=$(git describe --tags --abbrev=0 || echo "v0.0.0")
+        LATEST_TAG=$(git tag --sort=-v:refname | head -n 1 || echo "v0.0.0")
         echo "Latest tag: $LATEST_TAG"
-        
+    
         # Remove the 'v' prefix from the tag
-        LATEST_TAG=${LATEST_TAG#v}
-        echo "LATEST_TAG=$LATEST_TAG" >> $GITHUB_ENV
+        VERSION=${LATEST_TAG#v}
+        echo "VERSION=$VERSION" >> $GITHUB_ENV
     
-        # Get the commit hash of the latest tag
-        LAST_COMMIT=$(git rev-list -n 1 "refs/tags/$LATEST_TAG")
-        echo "LAST_COMMIT=$LAST_COMMIT" >> $GITHUB_ENV
-        echo "Last commit for tag $LATEST_TAG: $LAST_COMMIT"
-    
+        # Split version into components
+        IFS='.' read -r major minor patch <<< "$VERSION" || echo "0.0.0"
+        echo "NEXT_MAJOR=$major" >> $GITHUB_ENV
+        echo "NEXT_MINOR=$minor" >> $GITHUB_ENV
+        echo "NEXT_PATCH=$patch" >> $GITHUB_ENV
+
     - name: Increment version based on bump type
       run: |
         # Calculate the next version based on the bump type
@@ -97,26 +95,10 @@ jobs:
           echo "Tag v$NEXT_MAJOR.$NEXT_MINOR.$NEXT_PATCH does not exist. Proceeding with the release."
         fi
 
-    - name: Get merged PRs after last release
+    - name: Generate Release Notes(new one)
       run: |
-        # Get the commit hash of the latest tag
-        LAST_COMMIT=$(git rev-list -n 1 $LATEST_TAG)
-        echo "LAST_COMMIT=$LAST_COMMIT" >> $GITHUB_ENV
-        echo "Last commit for tag $LATEST_TAG: $LAST_COMMIT"
-
-        # Fetch merged PRs since the last commit
-        pr_data=$(gh pr list --state merged --base main --json title,body,labels,mergedAt --jq \
-          ".[] | select(.mergedAt > \"$(git show -s --format=%ci $LAST_COMMIT)\") | {title, body, labels}")
-        echo "PR Data: $pr_data"
-
-        echo "$pr_data" > pr_data.json
-
-    - name: Generate Release Notes
-      run: |
-        # Read the PR data
-        pr_data=$(cat pr_data.json)
-
-        # Categorize PRs based on their labels
+        pr_data=$(gh pr list --state merged --base main --json title,body,labels)
+        
         categorized_data=$(echo "$pr_data" | jq -r '
           group_by(.labels | map(.name) | flatten | map(select(. == "feature" or . == "bug" or . == "breaking-change"))) |
           map({
