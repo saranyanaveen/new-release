@@ -80,26 +80,26 @@ jobs:
 
     - name: Generate Release Notes
       run: |
-        pr_data=$(gh pr list --state merged --base main --json title,body,labels)
-        
-        categorized_data=$(echo "$pr_data" | jq -r '
-          group_by(.labels | map(.name) | flatten | map(select(. == "feature" or . == "bug" or . == "breaking-change"))) |
-          map({
-            category: (
-              if any(.labels[]?.name == "feature") then "Features"
-              elif any(.labels[]?.name == "bug") then "Bug Fixes"
-              elif any(.labels[]?.name == "breaking-change") then "Breaking Changes"
-              else "Other" end
-            ),
-            notes: map("\(.title): \n\(.body)") | unique | join("\n")
-          }) |
-          .[] |
-          "## " + .category + "\n" + .notes
-        ')
-
-        echo "$categorized_data" > release_notes.md
-        echo "Release notes generated and saved to release_notes.md."
-
+          pr_data=$(gh pr list --state merged --base main --json title,body,labels)
+          
+          categorized_data=$(echo "$pr_data" | jq -r '
+            group_by(.labels | map(.name) | flatten | map(select(. == "feature" or . == "bug" or . == "breaking-change"))) |
+            map({
+              category: (
+                if any(.labels[]?.name == "feature") then "Features"
+                elif any(.labels[]?.name == "bug") then "Bug Fixes"
+                elif any(.labels[]?.name == "breaking-change") then "Breaking Changes"
+                else "Other" end
+              ),
+              notes: map("\(.title): \n\(.body)") | unique | join("\n")
+            }) |
+            .[] |
+            "## " + .category + "\n" + .notes
+          ')
+      
+          echo "$categorized_data" > release_notes.md
+          echo "Release notes generated and saved to release_notes.md."
+      
     - name: Create Release
       run: |
         gh release create $NEW_VERSION release_notes.md --title "Release $NEW_VERSION" --notes-file release_notes.md
