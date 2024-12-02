@@ -25,7 +25,7 @@ jobs:
     - name: Get merged PR data
       run: |
         # Fetch the merged PRs with title and labels
-        pr_data=$(gh pr list --state merged --base main --json title,labels)
+        pr_data=$(gh pr list --state merged --base main --json title,labels,mergedAt)
 
         echo "PR Data: $pr_data"
 
@@ -95,10 +95,26 @@ jobs:
           echo "Tag v$NEXT_MAJOR.$NEXT_MINOR.$NEXT_PATCH does not exist. Proceeding with the release."
         fi
 
+    - name: Get merged PRs after last release
+      run: |
+        # Get the commit hash of the latest tag
+        LAST_COMMIT=$(git rev-list -n 1 $LATEST_TAG)
+        echo "LAST_COMMIT=$LAST_COMMIT" >> $GITHUB_ENV
+        echo "Last commit for tag $LATEST_TAG: $LAST_COMMIT"
+
+        # Fetch merged PRs since the last commit
+        pr_data=$(gh pr list --state merged --base main --json title,body,labels,mergedAt --jq \
+          ".[] | select(.mergedAt > \"$(git show -s --format=%ci $LAST_COMMIT)\") | {title, body, labels}")
+        echo "PR Data: $pr_data"
+
+        echo "$pr_data" > pr_data.json
+
     - name: Generate Release Notes
       run: |
-        pr_data=$(gh pr list --state merged --base main --json title,body,labels)
-        
+        # Read the PR data
+        pr_data=$(cat pr_data.json)
+
+        # Categorize PRs based on their labels
         categorized_data=$(echo "$pr_data" | jq -r '
           group_by(.labels | map(.name) | flatten | map(select(. == "feature" or . == "bug" or . == "breaking-change"))) |
           map({
