@@ -1,104 +1,99 @@
----
-    name: Release Notes Generation and Version Bumping
-    on:
-      push:
-        branches:
-          - main
-      pull_request:
-        branches:
-          - main
-    jobs:
-      release:
-        runs-on: ubuntu-latest
-        steps:
-          - name: Checkout code
-            uses: actions/checkout@v2
-          - name: Fetch merged PRs targeting the main branch
-            run: |
-              pr_data=$(gh pr list --state merged --base main --json title)
-              # Initialize version bump type
-              BUMP_TYPE="patch"
-    
-              # Check PR titles for versioning keywords
-              if echo "$pr_data" | grep -iq "major"; then
-                BUMP_TYPE="major"
-              elif echo "$pr_data" | grep -iq "minor"; then
-                BUMP_TYPE="minor"
-              fi
-    
-              echo "BUMP_TYPE=$BUMP_TYPE" >> $GITHUB_ENV
-              echo "Determined BUMP_TYPE=$BUMP_TYPE"
-          - name: Get latest tag and calculate next version
-            id: calculate_version
-            run: |
-              # Fetch all tags
-    
-              git fetch --tags
-    
-    
-              # Get the latest tag, or use "v0.0.0" if no tags are found
-    
-              LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
-    
-              echo "Latest tag: $LATEST_TAG"
-    
-    
-              # Remove the 'v' prefix and split into major, minor, patch
-    
-              VERSION=${LATEST_TAG#v}
-    
-              IFS='.' read -r major minor patch <<< "$VERSION"
-    
-    
-              # Increment the version based on the bump type
-    
-              if [ "$BUMP_TYPE" = "major" ]; then
-                major=$((major + 1))
-                minor=0
-                patch=0
-              elif [ "$BUMP_TYPE" = "minor" ]; then
-                minor=$((minor + 1))
-                patch=0
-              else
-                patch=$((patch + 1))
-              fi
-    
-    
-              # Construct the new version
-    
-              NEW_VERSION="v$major.$minor.$patch"
-    
-              echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_ENV
-    
-              echo "Calculated NEW_VERSION=$NEW_VERSION"
-          - name: Generate release notes from merged PRs
-            run: |
-              pr_data=$(gh pr list --state merged --base main --json title,body,labels)
-    
-    
-              # Categorize PRs by label and remove duplicates
-    
-              categorized_data=$(echo "$pr_data" | jq -r '
-                group_by(.labels | map(.name) | flatten | map(select(. == "feature" or . == "bug" or . == "breaking-change"))) |
-                map({
-                  category: (
-                    if any(.labels[]?.name == "feature") then "Features"
-                    elif any(.labels[]?.name == "bug") then "Bug Fixes"
-                    elif any(.labels[]?.name == "breaking-change") then "Breaking Changes"
-                    else "Other" end
-                  ),
-                  notes: map("\(.title): \n\(.body)") | unique | join("\n")
-                }) |
-                .[] |
-                "## " + .category + "\n" + .notes
-              ')
-    
-    
-              echo "$categorized_data" > release_notes.md
-    
-              echo "Release notes generated and saved to release_notes.md."
-          - name: Create a GitHub release with the generated release notes
-            run: |
-              gh release create $NEW_VERSION release_notes.md --title "Release
-              $NEW_VERSION" --notes-file release_notes.md
-    
+name: Release Notes Generation and Version Bumping
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    # Step 1: Fetch merged PRs targeting the main branch
+    - name: Fetch merged PRs targeting the main branch
+      run: |
+        pr_data=$(gh pr list --state merged --base main --json title)
+        # Initialize version bump type
+        BUMP_TYPE="patch"
+
+        # Check PR titles for versioning keywords
+        if echo "$pr_data" | grep -iq "major"; then
+          BUMP_TYPE="major"
+        elif echo "$pr_data" | grep -iq "minor"; then
+          BUMP_TYPE="minor"
+        fi
+
+        echo "BUMP_TYPE=$BUMP_TYPE" >> $GITHUB_ENV
+        echo "Determined BUMP_TYPE=$BUMP_TYPE"
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Use the GitHub token
+
+    # Step 2: Get latest tag and calculate next version
+    - name: Get latest tag and calculate next version
+      id: calculate_version
+      run: |
+        # Fetch all tags
+        git fetch --tags
+
+        # Get the latest tag, or use "v0.0.0" if no tags are found
+        LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+        echo "Latest tag: $LATEST_TAG"
+
+        # Remove the 'v' prefix and split into major, minor, patch
+        VERSION=${LATEST_TAG#v}
+        IFS='.' read -r major minor patch <<< "$VERSION"
+
+        # Increment the version based on the bump type
+        if [ "$BUMP_TYPE" = "major" ]; then
+          major=$((major + 1))
+          minor=0
+          patch=0
+        elif [ "$BUMP_TYPE" = "minor" ]; then
+          minor=$((minor + 1))
+          patch=0
+        else
+          patch=$((patch + 1))
+        fi
+
+        # Construct the new version
+        NEW_VERSION="v$major.$minor.$patch"
+        echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_ENV
+        echo "Calculated NEW_VERSION=$NEW_VERSION"
+
+    # Step 3: Generate release notes from merged PRs
+    - name: Generate release notes from merged PRs
+      run: |
+        pr_data=$(gh pr list --state merged --base main --json title,body,labels)
+
+        # Categorize PRs by label and remove duplicates
+        categorized_data=$(echo "$pr_data" | jq -r '
+          group_by(.labels | map(.name) | flatten | map(select(. == "feature" or . == "bug" or . == "breaking-change"))) |
+          map({
+            category: (
+              if any(.labels[]?.name == "feature") then "Features"
+              elif any(.labels[]?.name == "bug") then "Bug Fixes"
+              elif any(.labels[]?.name == "breaking-change") then "Breaking Changes"
+              else "Other" end
+            ),
+            notes: map("\(.title): \n\(.body)") | unique | join("\n")
+          }) |
+          .[] |
+          "## " + .category + "\n" + .notes
+        ')
+
+        echo "$categorized_data" > release_notes.md
+        echo "Release notes generated and saved to release_notes.md."
+
+    # Step 4: Create a GitHub release with the generated release notes
+    - name: Create a GitHub release with the generated release notes
+      run: |
+        gh release create $NEW_VERSION release_notes.md --title "Release $NEW_VERSION" --notes-file release_notes.md
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Use the GitHub token
