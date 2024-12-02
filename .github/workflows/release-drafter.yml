@@ -1,3 +1,4 @@
+
 name: Release Notes Generation and Version Bumping
 
 on:
@@ -106,3 +107,4 @@ jobs:
         gh release create $NEW_VERSION release_notes.md --title "Release $NEW_VERSION" --notes-file release_notes.md
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Use the GitHub token
+
