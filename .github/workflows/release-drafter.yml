@@ -1,10 +1,8 @@
-
 name: Create Release
-
 on:
   push:
-    branches:
-      - main
+    tags:
+      - "*"  # Trigger for tag pushes
   pull_request:
     branches:
       - main
@@ -12,73 +10,36 @@ on:
 jobs:
   release:
     runs-on: ubuntu-latest
-
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v2
+      - name: Checkout code
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0  # Ensure full fetch including all tags
 
-    - name: Set up GitHub CLI
-      run: |
-        sudo apt update
-        sudo apt install gh
-        gh auth login --with-token <<< "${{ secrets.GITHUB_TOKEN }}"
-    
-    - name: Fetch merged PRs targeting the main branch
-      run: |
-        pr_data=$(gh pr list --state merged --base main --json title)
-        # Initialize version bump type
-        BUMP_TYPE="patch"
-    
-        # Check PR titles for versioning keywords
-        if echo "$pr_data" | grep -iq "major"; then
-          BUMP_TYPE="major"
-        elif echo "$pr_data" | grep -iq "minor"; then
-          BUMP_TYPE="minor"
-        fi
-    
-        echo "BUMP_TYPE=$BUMP_TYPE" >> $GITHUB_ENV
-        echo "Determined BUMP_TYPE=$BUMP_TYPE"
+      - name: Set up GitHub CLI
+        run: |
+          sudo apt update
+          sudo apt install gh
+          gh auth login --with-token <<< "${{ secrets.GITHUB_TOKEN }}"
 
-    - name: Get latest tag and calculate next version
-      id: calculate_version
-      run: |
-        # Fetch all tags
-        git fetch --tags
-        
-        # Get the latest tag or use "v0.0.0" as fallback
-        LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
-        VERSION=${LATEST_TAG}
-        IFS='.' read -r major minor patch <<< "$VERSION"
+      - name: Debug Tags
+        run: git tag --list  # Log all fetched tags
 
-        # Increment version based on bump type
-        if [ "$BUMP_TYPE" = "major" ]; then
-          major=$((major + 1))
-          minor=0
-          patch=0
-        elif [ "$BUMP_TYPE" = "minor" ]; then
-          minor=$((minor + 1))
-          patch=0
-        else
-          patch=$((patch + 1))
-        fi
+      - name: Get merged PR data
+        run: |
+          pr_data=$(gh pr list --state merged --base main --json title,labels)
+          echo "PR Data: $pr_data"
 
-        NEW_VERSION="v$major.$minor.$patch"
-        echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_ENV
-        echo "Calculated NEW_VERSION=$NEW_VERSION"
+          BUMP_TYPE="patch"  # Default version bump type
 
-    - name: Check if tag exists
-      run: |
-        TAG_EXISTS=$(git tag -l "v$NEW_VERSION")
-        if [ -n "$TAG_EXISTS" ]; then
-          echo "Tag v$NEW_VERSION already exists. Incrementing patch version..."
-          NEW_VERSION="v$(echo $NEW_VERSION | awk -F. -v OFS=. '{$NF++;print}')"
-          echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_ENV
-        else
-          echo "Tag v$NEW_VERSION does not exist. Proceeding with the release."
-        fi
+          if echo "$pr_data" | grep -iq "major"; then
+            BUMP_TYPE="major"
+          elif echo "$pr_data" | grep -iq "minor"; then
+            BUMP_TYPE="minor"
+          fi
 
-    - name: Generate Release Notes
-      run: |
+      - name: Generate Release Notes
+        run: |
           pr_data=$(gh pr list --state merged --base main --json title,body,labels)
           
           categorized_data=$(echo "$pr_data" | jq -r '
@@ -99,9 +60,9 @@ jobs:
           echo "$categorized_data" > release_notes.md
           echo "Release notes generated and saved to release_notes.md."
       
-    - name: Create Release
-      run: |
-        gh release create $NEW_VERSION release_notes.md --title "Release $NEW_VERSION" --notes-file release_notes.md
-      env:
-        NEW_VERSION: $NEW_VERSION
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create Release
+        run: |
+         gh release create $NEW_VERSION release_notes.md --title "Release $NEW_VERSION" --notes-file release_notes.md
+        env:
+         NEW_VERSION: $NEW_VERSION
+         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
