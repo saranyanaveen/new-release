@@ -2,8 +2,8 @@
     name: Create Release
     on:
       push:
-        tags:
-          - "*"
+        branches:
+          - main
       pull_request:
         branches:
           - main
@@ -66,7 +66,7 @@
               echo "NEXT_MINOR=$NEXT_MINOR" >> $GITHUB_ENV
               echo "NEXT_PATCH=$NEXT_PATCH"
           - name: Generate Release Notes
-            run: >
+            run: |
               # Retrieve merged PR data
     
               pr_data=$(gh pr list --state merged --base main --json title,body,labels)
@@ -96,7 +96,7 @@
     
               echo "Release notes generated and saved to release_notes.md."
           - name: Check if tag exists
-            run: >
+            run: |
               TAG_EXISTS=$(git tag -l "v$NEXT_MAJOR.$NEXT_MINOR.$NEXT_PATCH")
     
     
@@ -109,7 +109,7 @@
               fi
           - name: Create Release
             if: github.event_name == 'push'
-            run: >
+            run: |
               TAG_EXISTS=$(git tag -l "v$NEXT_MAJOR.$NEXT_MINOR.$NEXT_PATCH")
     
     
