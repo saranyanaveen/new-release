@@ -51,20 +51,23 @@ jobs:
     - name: Get latest tag version
       id: get_version
       run: |
+        # Fetch all tags to ensure the latest tag is included
+        git fetch --tags
+        
         # Get the latest tag (fallback to v0.0.0 if no tags exist)
-        LATEST_TAG=$(git tag --sort=-v:refname | head -n 1 || echo "v0.0.0")
+        LATEST_TAG=$(git describe --tags --abbrev=0 || echo "v0.0.0")
         echo "Latest tag: $LATEST_TAG"
-    
+        
         # Remove the 'v' prefix from the tag
         VERSION=${LATEST_TAG#v}
         echo "VERSION=$VERSION" >> $GITHUB_ENV
-    
+        
         # Split version into components
         IFS='.' read -r major minor patch <<< "$VERSION" || echo "0.0.0"
         echo "NEXT_MAJOR=$major" >> $GITHUB_ENV
         echo "NEXT_MINOR=$minor" >> $GITHUB_ENV
         echo "NEXT_PATCH=$patch" >> $GITHUB_ENV
-
+    
     - name: Increment version based on bump type
       run: |
         # Calculate the next version based on the bump type
