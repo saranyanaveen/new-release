@@ -23,6 +23,7 @@ jobs:
         sudo apt install gh
         gh auth login --with-token <<< "${{ secrets.GITHUB_TOKEN }}"
     
+
     - name: Fetch merged PRs targeting the main branch
       run: |
         pr_data=$(gh pr list --state merged --base main --json title)
