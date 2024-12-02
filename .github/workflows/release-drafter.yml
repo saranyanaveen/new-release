@@ -43,10 +43,10 @@ jobs:
       run: |
         # Fetch all tags
         git fetch --tags
-        
+
         # Get the latest tag or use "v0.0.0" as fallback
         LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
-        VERSION=${LATEST_TAG}
+        VERSION=${LATEST_TAG#v}  # Remove the 'v' prefix
         IFS='.' read -r major minor patch <<< "$VERSION"
 
         # Increment version based on bump type
@@ -61,19 +61,21 @@ jobs:
           patch=$((patch + 1))
         fi
 
+        # Reconstruct version with 'v' prefix
         NEW_VERSION="v$major.$minor.$patch"
         echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_ENV
         echo "Calculated NEW_VERSION=$NEW_VERSION"
 
     - name: Check if tag exists
       run: |
-        TAG_EXISTS=$(git tag -l "v$NEW_VERSION")
+        TAG_EXISTS=$(git tag -l "$NEW_VERSION")
         if [ -n "$TAG_EXISTS" ]; then
-          echo "Tag v$NEW_VERSION already exists. Incrementing patch version..."
+          echo "Tag $NEW_VERSION already exists. Incrementing patch version..."
+          # Increment patch version if tag exists
           NEW_VERSION="v$(echo $NEW_VERSION | awk -F. -v OFS=. '{$NF++;print}')"
           echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_ENV
         else
-          echo "Tag v$NEW_VERSION does not exist. Proceeding with the release."
+          echo "Tag $NEW_VERSION does not exist. Proceeding with the release."
         fi
 
     - name: Generate Release Notes
