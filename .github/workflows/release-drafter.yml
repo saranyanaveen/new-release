@@ -19,7 +19,7 @@ jobs:
     # Step 1: Fetch merged PRs targeting the main branch
     - name: Fetch merged PRs targeting the main branch
       run: |
-        pr_data=$(gh pr list --state merged --base main --json title)
+        pr_data=$(gh pr list --state merged --base main --json title,body,labels)
         # Initialize version bump type
         BUMP_TYPE="patch"
 
