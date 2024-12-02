@@ -41,11 +41,13 @@ jobs:
 
         echo "BUMP_TYPE=$BUMP_TYPE" >> $GITHUB_ENV
         echo "Determined BUMP_TYPE=$BUMP_TYPE"
+
     - name: Fetch all tags
       run: git fetch --tags
-  
+
     - name: List all tags
       run: git tag
+
     - name: Get latest tag version
       id: get_version
       run: |
@@ -63,8 +65,7 @@ jobs:
         echo "NEXT_MAJOR=$major" >> $GITHUB_ENV
         echo "NEXT_MINOR=$minor" >> $GITHUB_ENV
         echo "NEXT_PATCH=$patch" >> $GITHUB_ENV
-    
-      
+
     - name: Increment version based on bump type
       run: |
         # Calculate the next version based on the bump type
@@ -119,7 +120,14 @@ jobs:
 
     - name: Create Release
       run: |
-        gh release create "v$NEXT_MAJOR.$NEXT_MINOR.$NEXT_PATCH" release_notes.md --title "Release v$NEXT_MAJOR.$NEXT_MINOR.$NEXT_PATCH" --notes-file release_notes.md
+        # Ensure the tag is not already created before creating the release
+        TAG_EXISTS=$(git tag -l "v$NEXT_MAJOR.$NEXT_MINOR.$NEXT_PATCH")
+        if [ -z "$TAG_EXISTS" ]; then
+          # If the tag doesn't exist, create the release
+          gh release create "v$NEXT_MAJOR.$NEXT_MINOR.$NEXT_PATCH" release_notes.md --title "Release v$NEXT_MAJOR.$NEXT_MINOR.$NEXT_PATCH" --notes-file release_notes.md
+        else
+          echo "Release with tag v$NEXT_MAJOR.$NEXT_MINOR.$NEXT_PATCH already exists. Skipping release creation."
+        fi
       env:
         NEW_VERSION: v$NEXT_MAJOR.$NEXT_MINOR.$NEXT_PATCH
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
