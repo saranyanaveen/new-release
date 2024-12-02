@@ -2,11 +2,11 @@ name: Create Release
 
 on:
   push:
-    tags:
-      - '*'  # Trigger on new tags being pushed
+    branches:
+      - main
   pull_request:
     branches:
-      - main  # Trigger when PR is merged into main
+      - main
 
 jobs:
   release:
@@ -95,12 +95,10 @@ jobs:
           echo "Tag v$NEXT_MAJOR.$NEXT_MINOR.$NEXT_PATCH does not exist. Proceeding with the release."
         fi
 
-    - name: Generate Release Notes
+    - name: Generate Release Notes(new one)
       run: |
-        # Only generate release notes for PRs merged into main after a new tag is created
         pr_data=$(gh pr list --state merged --base main --json title,body,labels)
-
-        # Filter and categorize the PRs based on labels
+        
         categorized_data=$(echo "$pr_data" | jq -r '
           group_by(.labels | map(.name) | flatten | map(select(. == "feature" or . == "bug" or . == "breaking-change"))) |
           map({
@@ -116,12 +114,11 @@ jobs:
           "## " + .category + "\n" + .notes
         ')
 
-        # Write the categorized release notes to a file
         echo "$categorized_data" > release_notes.md
         echo "Release notes generated and saved to release_notes.md."
 
     - name: Create Release
-      if: github.event_name == 'push'  # Only create release on merge to main with a new tag
+      if: github.event_name == 'push' # Only create release on merge to main
       run: |
         # Ensure the tag is not already created before creating the release
         TAG_EXISTS=$(git tag -l "v$NEXT_MAJOR.$NEXT_MINOR.$NEXT_PATCH")
