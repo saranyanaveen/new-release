@@ -59,14 +59,13 @@ jobs:
         echo "Latest tag: $LATEST_TAG"
         
         # Remove the 'v' prefix from the tag
-        VERSION=${LATEST_TAG#v}
-        echo "VERSION=$VERSION" >> $GITHUB_ENV
-        
-        # Split version into components
-        IFS='.' read -r major minor patch <<< "$VERSION" || echo "0.0.0"
-        echo "NEXT_MAJOR=$major" >> $GITHUB_ENV
-        echo "NEXT_MINOR=$minor" >> $GITHUB_ENV
-        echo "NEXT_PATCH=$patch" >> $GITHUB_ENV
+        LATEST_TAG=${LATEST_TAG#v}
+        echo "LATEST_TAG=$LATEST_TAG" >> $GITHUB_ENV
+    
+        # Get the commit hash of the latest tag
+        LAST_COMMIT=$(git rev-list -n 1 "refs/tags/$LATEST_TAG")
+        echo "LAST_COMMIT=$LAST_COMMIT" >> $GITHUB_ENV
+        echo "Last commit for tag $LATEST_TAG: $LAST_COMMIT"
     
     - name: Increment version based on bump type
       run: |
