@@ -21,60 +21,73 @@ jobs:
         sudo apt update
         sudo apt install gh
         gh auth login --with-token <<< "${{ secrets.GITHUB_TOKEN }}"
-    
-    - name: Fetch merged PRs targeting the main branch
+
+    - name: Get merged PR data
       run: |
-        pr_data=$(gh pr list --state merged --base main --json title,labels,body)
-        
-        # Initialize version bump type
+        # Fetch the merged PRs with title and labels
+        pr_data=$(gh pr list --state merged --base main --json title,labels)
+
+        echo "PR Data: $pr_data"
+
+        # Initialize version bump type to 'patch'
         BUMP_TYPE="patch"
-    
+
         # Check PR titles for versioning keywords
         if echo "$pr_data" | grep -iq "major"; then
           BUMP_TYPE="major"
         elif echo "$pr_data" | grep -iq "minor"; then
           BUMP_TYPE="minor"
         fi
-    
+
         echo "BUMP_TYPE=$BUMP_TYPE" >> $GITHUB_ENV
         echo "Determined BUMP_TYPE=$BUMP_TYPE"
 
-    - name: Get latest tag and calculate next version
-      id: calculate_version
+    - name: Get latest tag version
+      id: get_version
       run: |
-        # Fetch all tags
-        git fetch --tags
-        
-        # Get the latest tag or use "v0.0.0" as fallback
+        # Get the latest tag (e.g., v1.0.0)
         LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
-        VERSION=${LATEST_TAG}
+        echo "Latest tag: $LATEST_TAG"
+
+        # Strip the 'v' from the tag (e.g., v1.0.0 -> 1.0.0)
+        VERSION=${LATEST_TAG#v}
+        echo "Version: $VERSION"
+
+        # Split the version into major, minor, patch
         IFS='.' read -r major minor patch <<< "$VERSION"
 
-        # Increment version based on bump type
+        echo "NEXT_MAJOR=$major" >> $GITHUB_ENV
+        echo "NEXT_MINOR=$minor" >> $GITHUB_ENV
+        echo "NEXT_PATCH=$patch" >> $GITHUB_ENV
+
+    - name: Increment version based on bump type
+      run: |
+        # Calculate the next version based on the bump type
         if [ "$BUMP_TYPE" = "major" ]; then
-          major=$((major + 1))
-          minor=0
-          patch=0
+          NEXT_MAJOR=$((NEXT_MAJOR + 1))
+          NEXT_MINOR=0
+          NEXT_PATCH=0
         elif [ "$BUMP_TYPE" = "minor" ]; then
-          minor=$((minor + 1))
-          patch=0
+          NEXT_MINOR=$((NEXT_MINOR + 1))
+          NEXT_PATCH=0
         else
-          patch=$((patch + 1))
+          NEXT_PATCH=$((NEXT_PATCH + 1))
         fi
 
-        NEW_VERSION="v$major.$minor.$patch"
-        echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_ENV
-        echo "Calculated NEW_VERSION=$NEW_VERSION"
+        echo "NEXT_MAJOR=$NEXT_MAJOR" >> $GITHUB_ENV
+        echo "NEXT_MINOR=$NEXT_MINOR" >> $GITHUB_ENV
+        echo "NEXT_PATCH=$NEXT_PATCH"
+        echo "New version: v$NEXT_MAJOR.$NEXT_MINOR.$NEXT_PATCH"
 
     - name: Check if tag exists
       run: |
-        TAG_EXISTS=$(git tag -l "v$NEW_VERSION")
+        TAG_EXISTS=$(git tag -l "v$NEXT_MAJOR.$NEXT_MINOR.$NEXT_PATCH")
         if [ -n "$TAG_EXISTS" ]; then
-          echo "Tag v$NEW_VERSION already exists. Incrementing patch version..."
-          NEW_VERSION="v$(echo $NEW_VERSION | awk -F. -v OFS=. '{$NF++;print}')"
-          echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_ENV
+          echo "Tag v$NEXT_MAJOR.$NEXT_MINOR.$NEXT_PATCH already exists. Incrementing patch version..."
+          NEXT_PATCH=$((NEXT_PATCH + 1))
+          echo "New version: v$NEXT_MAJOR.$NEXT_MINOR.$NEXT_PATCH"
         else
-          echo "Tag v$NEW_VERSION does not exist. Proceeding with the release."
+          echo "Tag v$NEXT_MAJOR.$NEXT_MINOR.$NEXT_PATCH does not exist. Proceeding with the release."
         fi
 
     - name: Generate Release Notes
@@ -95,13 +108,13 @@ jobs:
           .[] |
           "## " + .category + "\n" + .notes
         ')
-      
+
         echo "$categorized_data" > release_notes.md
         echo "Release notes generated and saved to release_notes.md."
 
     - name: Create Release
       run: |
-        gh release create $NEW_VERSION release_notes.md --title "Release $NEW_VERSION" --notes-file release_notes.md
+        gh release create "v$NEXT_MAJOR.$NEXT_MINOR.$NEXT_PATCH" release_notes.md --title "Release v$NEXT_MAJOR.$NEXT_MINOR.$NEXT_PATCH" --notes-file release_notes.md
       env:
-        NEW_VERSION: $NEW_VERSION
+        NEW_VERSION: v$NEXT_MAJOR.$NEXT_MINOR.$NEXT_PATCH
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
