@@ -27,22 +27,22 @@ jobs:
           sudo apt update
           sudo apt install gh
 
-      # Determine version bump based on PR labels
+      # Determine version bump based on PR titles
       - name: Determine version bump type
         id: determine_bump
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           # Fetch merged PRs targeting the main branch
-          pr_data=$(gh pr list --state merged --base main --json labels)
+          pr_data=$(gh pr list --state merged --base main --json title)
 
           # Initialize version bump type
           BUMP_TYPE="patch"
 
-          # Check PR labels for versioning keywords
-          if echo "$pr_data" | grep -iq '"breaking-change"'; then
+          # Check PR titles for versioning keywords
+          if echo "$pr_data" | grep -iq "major"; then
             BUMP_TYPE="major"
-          elif echo "$pr_data" | grep -iq '"feature"'; then
+          elif echo "$pr_data" | grep -iq "minor"; then
             BUMP_TYPE="minor"
           fi
 
@@ -53,7 +53,7 @@ jobs:
       - name: Get latest tag and calculate next version
         id: calculate_version
         run: |
-          # Get the latest tag
+          # Get the latest tag, or use "v0.0.0" if no tags are found
           LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
           echo "Latest tag: $LATEST_TAG"
 
