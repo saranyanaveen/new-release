@@ -18,7 +18,7 @@ jobs:
 
     # Step 1: Authenticate GitHub CLI
     - name: Authenticate GitHub CLI
-      run: gh auth login --with-token < ${{ secrets.GITHUB_TOKEN }}
+      run: gh auth login --with-token <<< "${{ secrets.GITHUB_TOKEN }}"
 
     # Debug: Check authentication status
     - name: Verify GitHub CLI authentication
