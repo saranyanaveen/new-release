@@ -23,13 +23,13 @@
               echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
           - name: Get latest release tag
             id: get_latest_release
-            run: >
+            run: |
               LATEST_TAG=$(git tag --sort=-v:refname | head -n 1 || echo "v0.0.0")
     
               echo "LATEST_TAG=$LATEST_TAG" >> $GITHUB_ENV  # Set as an environment variable for future steps
           - name: Get merged PRs since last release
             id: pr_data
-            run: >
+            run: |
               LATEST_TAG="${{ env.LATEST_TAG }}"  # Use the environment variable from
               previous step
     
@@ -40,7 +40,7 @@
               echo "PR_DATA=$PR_DATA" >> $GITHUB_ENV  # Set as an environment variable for future steps
           - name: Check if workflow files changed
             id: check_workflow_changes
-            run: >
+            run: |
               PR_FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }}
               ${{ github.sha }})
     
@@ -55,7 +55,7 @@
               fi
           - name: Determine bump type
             id: bump_type
-            run: >
+            run: |
               PR_DATA=$(cat pr_data.json)
     
               BUMP_TYPE="patch"  # Default bump type
@@ -81,7 +81,7 @@
               echo "BUMP_TYPE=$BUMP_TYPE" >> $GITHUB_OUTPUT  # Output the bump type for use in future steps
           - name: Calculate next version
             id: next_version
-            run: >
+            run: |
               LATEST_TAG="${{ env.LATEST_TAG }}"  # Access the latest tag from the
               environment variable
     
@@ -111,7 +111,7 @@
           - name: Generate Release Notes
             id: release_notes
             if: ${{ steps.check_workflow_changes.outputs.skip_release_notes != 'true' }}
-            run: >
+            run: |
               PR_DATA=$(cat pr_data.json)
     
               RELEASE_NOTES=$(echo "$PR_DATA" | jq -r '
