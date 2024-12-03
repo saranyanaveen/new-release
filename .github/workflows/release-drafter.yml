@@ -11,71 +11,94 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
+      # Checkout the code
       - name: Checkout code
         uses: actions/checkout@v2
         with:
           fetch-depth: 0
 
-      - name: Set up GitHub CLI
+      # Set up GitHub CLI and jq
+      - name: Set up GitHub CLI and jq
         run: |
           sudo apt update
-          sudo apt install -y gh
+          sudo apt install -y gh jq
           echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
 
-      - name: Install jq
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y jq
-        # This ensures jq is installed before using it in the next steps
-
-      - name: Get merged PR data
-        run: |
-          pr_data=$(gh pr list --state merged --base main --json title,labels)
-          echo "PR Data: $pr_data"
-
-          # Determine bump type (major > minor > patch)
-          BUMP_TYPE="patch"  # Default
-          if echo "$pr_data" | jq -e '.[] | select(.labels[]?.name == "major")' >/dev/null; then
-              BUMP_TYPE="major"
-          elif echo "$pr_data" | jq -e '.[] | select(.labels[]?.name == "minor")' >/dev/null; then
-              BUMP_TYPE="minor"
-          fi
-          echo "BUMP_TYPE=$BUMP_TYPE" >> $GITHUB_ENV
-
-      - name: Get latest tag version
-        id: get_version
+      # Get the latest release tag
+      - name: Get latest release tag
+        id: get_latest_release
         run: |
           LATEST_TAG=$(git tag --sort=-v:refname | head -n 1 || echo "v0.0.0")
-          echo "Latest tag: $LATEST_TAG"
+          echo "LATEST_TAG=$LATEST_TAG" >> $GITHUB_ENV
 
-          VERSION=${LATEST_TAG#v}
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
-
-          IFS='.' read -r major minor patch <<< "$VERSION"
-          echo "NEXT_MAJOR=$major" >> $GITHUB_ENV
-          echo "NEXT_MINOR=$minor" >> $GITHUB_ENV
-          echo "NEXT_PATCH=$patch" >> $GITHUB_ENV
-
-      - name: Increment version based on bump type
+      # Get merged PRs since the latest tag
+      - name: Get merged PRs since last release
+        id: pr_data
         run: |
-          if [ "$BUMP_TYPE" = "major" ]; then
-            NEXT_MAJOR=$((NEXT_MAJOR + 1))
-            NEXT_MINOR=0
-            NEXT_PATCH=0
-          elif [ "$BUMP_TYPE" = "minor" ]; then
-            NEXT_MINOR=$((NEXT_MINOR + 1))
-            NEXT_PATCH=0
+          LATEST_TAG="$LATEST_TAG"
+          PR_DATA=$(gh pr list --state merged --base main --search "merged:>$LATEST_TAG" --json title,labels,body)
+          echo "$PR_DATA" > pr_data.json
+          echo "PR_DATA=$PR_DATA" >> $GITHUB_ENV
+
+      # Determine the bump type using title and labels
+      - name: Determine bump type
+        id: bump_type
+        run: |
+          PR_DATA=$(cat pr_data.json)
+
+          # Default to "patch"
+          BUMP_TYPE="patch"
+
+          # Check PR titles for explicit keywords
+          if echo "$PR_DATA" | jq -e '.[] | select(.title | test("\\bmajor\\b"))' >/dev/null; then
+              BUMP_TYPE="major"
+          elif echo "$PR_DATA" | jq -e '.[] | select(.title | test("\\bminor\\b"))' >/dev/null; then
+              BUMP_TYPE="minor"
+          elif echo "$PR_DATA" | jq -e '.[] | select(.title | test("\\bpatch\\b"))' >/dev/null; then
+              BUMP_TYPE="patch"
           else
-            NEXT_PATCH=$((NEXT_PATCH + 1))
+              # If no title-based keywords, fallback to label-based logic
+              if echo "$PR_DATA" | jq -e '.[] | select(.labels[]?.name == "major" or .labels[]?.name == "breaking-change")' >/dev/null; then
+                  BUMP_TYPE="major"
+              elif echo "$PR_DATA" | jq -e '.[] | select(.labels[]?.name == "minor" or .labels[]?.name == "feature" or .labels[]?.name == "enhancement")' >/dev/null; then
+                  BUMP_TYPE="minor"
+              elif echo "$PR_DATA" | jq -e '.[] | select(.labels[]?.name == "patch" or .labels[]?.name == "fix" or .labels[]?.name == "bug" or .labels[]?.name == "chore" or .labels[]?.name == "maintenance")' >/dev/null; then
+                  BUMP_TYPE="patch"
+              fi
           fi
-          echo "NEXT_MAJOR=$NEXT_MAJOR" >> $GITHUB_ENV
-          echo "NEXT_MINOR=$NEXT_MINOR" >> $GITHUB_ENV
-          echo "NEXT_PATCH=$NEXT_PATCH" >> $GITHUB_ENV
 
-      - name: Generate Release Notes
+          echo "BUMP_TYPE=$BUMP_TYPE" >> $GITHUB_ENV
+          echo "::set-output name=bump_type::$BUMP_TYPE"
+
+      # Calculate next version
+      - name: Calculate next version
+        id: next_version
         run: |
-          pr_data=$(gh pr list --state merged --base main --json title,body,labels)
-          categorized_data=$(echo "$pr_data" | jq -r '
+          LATEST_TAG="$LATEST_TAG"
+          VERSION=${LATEST_TAG#v}
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
+
+          if [ "$BUMP_TYPE" = "major" ]; then
+            MAJOR=$((MAJOR + 1))
+            MINOR=0
+            PATCH=0
+          elif [ "$BUMP_TYPE" = "minor" ]; then
+            MINOR=$((MINOR + 1))
+            PATCH=0
+          else
+            PATCH=$((PATCH + 1))
+          fi
+
+          NEW_VERSION="v$MAJOR.$MINOR.$PATCH"
+          echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_ENV
+          echo "::set-output name=new_version::$NEW_VERSION"
+
+      # Generate release notes for PRs since the last tag
+      - name: Generate Release Notes
+        id: release_notes
+        run: |
+          PR_DATA=$(cat pr_data.json)
+          RELEASE_NOTES=$(echo "$PR_DATA" | jq -r '
             group_by(.labels | map(.name) | flatten | map(select(. == "feature" or . == "bug" or . == "breaking-change"))) |
             map({
               "category": (
@@ -84,36 +107,18 @@ jobs:
                 elif any(.labels[]?.name == "breaking-change") then "Breaking Changes"
                 else "Other" end
               ),
-              "notes": (map("\(.title): \n\(.body)") | unique | join("\n"))
+              "notes": (map("\(.title): \(.body)") | join("\n"))
             }) |
             .[] |
             "## " + .category + "\n" + .notes
           ')
-          echo "$categorized_data" > release_notes.md
+          echo "$RELEASE_NOTES" > release_notes.md
           echo "Release notes generated and saved to release_notes.md."
 
-      - name: Check if tag exists
-        run: |
-          TAG_EXISTS=$(git tag -l "v$NEXT_MAJOR.$NEXT_MINOR.$NEXT_PATCH")
-          if [ -n "$TAG_EXISTS" ]; then
-            echo "Tag v$NEXT_MAJOR.$NEXT_MINOR.$NEXT_PATCH already exists. Incrementing patch version..."
-            NEXT_PATCH=$((NEXT_PATCH + 1))
-            echo "New version: v$NEXT_MAJOR.$NEXT_MINOR.$NEXT_PATCH"
-          else
-            echo "Tag v$NEXT_MAJOR.$NEXT_MINOR.$NEXT_PATCH does not exist. Proceeding with the release."
-          fi
-          echo "NEXT_PATCH=$NEXT_PATCH" >> $GITHUB_ENV
-
+      # Create a release with the new version and release notes
       - name: Create Release
-        if: github.event_name == 'push'
+        id: create_release
         run: |
-          TAG_EXISTS=$(git tag -l "v$NEXT_MAJOR.$NEXT_MINOR.$NEXT_PATCH")
-          if [ -z "$TAG_EXISTS" ]; then
-            gh release create "v$NEXT_MAJOR.$NEXT_MINOR.$NEXT_PATCH" release_notes.md \
-              --title "Release v$NEXT_MAJOR.$NEXT_MINOR.$NEXT_PATCH" \
-              --notes-file release_notes.md
-          else
-            echo "Release with tag v$NEXT_MAJOR.$NEXT_MINOR.$NEXT_PATCH already exists. Skipping release creation."
-          fi
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NEW_VERSION="${{ steps.next_version.outputs.new_version }}"
+          RELEASE_NOTES=$(cat release_notes.md)
+          gh release create "$NEW_VERSION" --notes "$RELEASE_NOTES" --title "Release $NEW_VERSION"
