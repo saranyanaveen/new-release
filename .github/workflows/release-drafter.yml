@@ -106,17 +106,17 @@ jobs:
               OTHER_CHANGES="${OTHER_CHANGES}\n- major: ${PR_BODY}"
             fi
         
-            if echo "$PR_LABELS" | grep -q "minor"; then
+            if echo "$PR_LABELS" | grep -q "patch"; then
               BUG_FIXES="${BUG_FIXES}\n- minor: ${PR_BODY}"
             fi
         
-            if echo "$PR_LABELS" | grep -q "feature"; then
+            if echo "$PR_LABELS" | grep -q "minor"; then
               FEATURES="${FEATURES}\n- feature: ${PR_BODY}"
             fi
         
             # Write release notes
             echo -e "## Release v${NEW_VERSION}\n" > release_notes.md
-            echo -e "### Other\n$OTHER_CHANGES\n" >> release_notes.md
+            echo -e "### Other changes\n$OTHER_CHANGES\n" >> release_notes.md
             echo -e "### Bug Fixes\n$BUG_FIXES\n" >> release_notes.md
             echo -e "### Features\n$FEATURES\n" >> release_notes.md
             echo "Release notes generated."
