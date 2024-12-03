@@ -93,14 +93,35 @@ jobs:
 
       - name: Generate Release Notes
         run: |
-          PR_BODY="${PR_BODY:-No description provided.}"
-          PR_LABELS="${PR_LABELS:-No labels assigned.}"
-          
-          echo -e "## Release Notes\n" > release_notes.md
-          echo -e "### Pull Request Title\n${PR_TITLE}\n" >> release_notes.md
-          echo -e "### Pull Request Description\n${PR_BODY}\n" >> release_notes.md
-          echo -e "### Labels\n${PR_LABELS}\n" >> release_notes.md
-          echo "Release notes generated."
+            PR_BODY="${PR_BODY:-No description provided.}"
+            PR_LABELS="${PR_LABELS:-No labels assigned.}"
+            
+            # Initialize categories
+            OTHER_CHANGES=""
+            BUG_FIXES=""
+            FEATURES=""
+        
+            # Check for labels and categorize changes
+            if echo "$PR_LABELS" | grep -q "major"; then
+              OTHER_CHANGES="${OTHER_CHANGES}\n- major: ${PR_BODY}"
+            fi
+        
+            if echo "$PR_LABELS" | grep -q "minor"; then
+              BUG_FIXES="${BUG_FIXES}\n- minor: ${PR_BODY}"
+            fi
+        
+            if echo "$PR_LABELS" | grep -q "feature"; then
+              FEATURES="${FEATURES}\n- feature: ${PR_BODY}"
+            fi
+        
+            # Write release notes
+            echo -e "## Release v${NEW_VERSION}\n" > release_notes.md
+            echo -e "### Other\n$OTHER_CHANGES\n" >> release_notes.md
+            echo -e "### Bug Fixes\n$BUG_FIXES\n" >> release_notes.md
+            echo -e "### Features\n$FEATURES\n" >> release_notes.md
+            echo "Release notes generated."
+        
+        
 
       - name: Create Release
         run: |
