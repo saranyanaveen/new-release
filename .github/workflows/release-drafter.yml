@@ -35,20 +35,11 @@ jobs:
           # Default bump type is patch
           BUMP_TYPE="patch"
           
-          # Check the PR title for bump type
-          if echo "$pr_data" | jq -e '.[] | select(.title | test("(?i)major"))' >/dev/null; then
+          # Check PR title or labels for bump type
+          if echo "$pr_data" | jq -e '.[] | select(.title | test("(?i)major"))' >/dev/null || echo "$pr_data" | jq -e '.[] | select(.labels[] | test("(?i)major"))' >/dev/null; then
               BUMP_TYPE="major"
-          elif echo "$pr_data" | jq -e '.[] | select(.title | test("(?i)minor"))' >/dev/null; then
+          elif echo "$pr_data" | jq -e '.[] | select(.title | test("(?i)minor"))' >/dev/null || echo "$pr_data" | jq -e '.[] | select(.labels[] | test("(?i)minor"))' >/dev/null; then
               BUMP_TYPE="minor"
-          fi
-
-          # Check the PR labels for bump type
-          if echo "$pr_data" | jq -e '.[] | select(.labels[] | test("(?i)major"))' >/dev/null; then
-              BUMP_TYPE="major"
-          elif echo "$pr_data" | jq -e '.[] | select(.labels[] | test("(?i)minor"))' >/dev/null; then
-              BUMP_TYPE="minor"
-          elif echo "$pr_data" | jq -e '.[] | select(.labels[] | test("(?i)patch"))' >/dev/null; then
-              BUMP_TYPE="patch"
           fi
 
           echo "BUMP_TYPE=$BUMP_TYPE" >> $GITHUB_ENV
@@ -128,6 +119,5 @@ jobs:
           gh release create "v$NEXT_MAJOR.$NEXT_MINOR.$NEXT_PATCH" \
           --repo saranyanaveen/new-release \
           --title "Release $NEXT_MAJOR.$NEXT_MINOR.$NEXT_PATCH" \
-           --notes-file release_notes.md \
-           --draft
-
+          --notes-file release_notes.md \
+          --draft
