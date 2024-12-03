@@ -12,7 +12,7 @@ jobs:
   release:
     runs-on: ubuntu-latest
     env:
-      LATEST_TAG: "v0.0.0"  # Default value for latest tag (can be overwritten in steps)
+      LATEST_TAG: "v0.0.0"  # Default value for the latest tag (can be overwritten in steps)
       
     steps:
       # Checkout the code
@@ -39,12 +39,12 @@ jobs:
       - name: Get merged PRs since last release
         id: pr_data
         run: |
-          LATEST_TAG="${{ env.LATEST_TAG }}"  # Use the environment variable from previous step
+          LATEST_TAG="${{ env.LATEST_TAG }}"  # Use the environment variable from the previous step
           PR_DATA=$(gh pr list --state merged --base main --search "merged:>$LATEST_TAG" --json title,labels,body)
           echo "$PR_DATA" > pr_data.json
           echo "PR_DATA=$PR_DATA" >> $GITHUB_ENV  # Set as an environment variable for future steps
 
-      # Debug PR Data
+      # Debug PR Data (Optional)
       - name: Debug PR Data
         run: echo "$PR_DATA" || echo "No PR data available"
 
@@ -70,37 +70,12 @@ jobs:
                   BUMP_TYPE="patch"
               fi
           fi
-
-          echo "BUMP_TYPE=$BUMP_TYPE" >> $GITHUB_OUTPUT  # Output the bump type for use in future steps
-
-      # Calculate next version
-      - name: Calculate next version
-        id: next_version
-        run: |
-          LATEST_TAG="${{ env.LATEST_TAG }}"  # Access the latest tag from the environment variable
-          BUMP_TYPE="${{ steps.bump_type.outputs.BUMP_TYPE }}"  # Access the bump type output
           
-          VERSION=${LATEST_TAG#v}
-          IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
+          echo "BUMP_TYPE=$BUMP_TYPE" >> $GITHUB_OUTPUT  # Output the bump type for future steps
 
-          if [ "$BUMP_TYPE" = "major" ]; then
-            MAJOR=$((MAJOR + 1))
-            MINOR=0
-            PATCH=0
-          elif [ "$BUMP_TYPE" = "minor" ]; then
-            MINOR=$((MINOR + 1))
-            PATCH=0
-          else
-            PATCH=$((PATCH + 1))
-          fi
-
-          NEW_VERSION="v$MAJOR.$MINOR.$PATCH"
-          echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_OUTPUT  # Set the new version as output
-
-      # Generate release notes for PRs since the last tag, but only if it's not an update to the workflow
+      # Generate Release Notes from PR data
       - name: Generate Release Notes
         id: release_notes
-        if: github.event_name == 'push' && !contains(github.event.head_commit.message, '.github/workflows/')
         run: |
           PR_DATA=$(cat pr_data.json)
           RELEASE_NOTES=$(echo "$PR_DATA" | jq -r '
@@ -117,29 +92,20 @@ jobs:
             .[] |
             "## " + .category + "\n" + .notes
           ')
+
           if [ -z "$RELEASE_NOTES" ]; then
             echo "No release notes generated."
           else
             echo "$RELEASE_NOTES" > release_notes.md  # Store release notes in a file
           fi
 
-      # Debug Release Notes File
-      - name: Debug Release Notes File
+      # Check if release_notes.md exists and create GitHub release
+      - name: Create GitHub Release
         run: |
           if [ -f release_notes.md ]; then
             cat release_notes.md
-          else
-            echo "release_notes.md not found"
-          fi
-
-      # Create a draft release with the new version and release notes
-      - name: Create Draft Release
-        id: create_draft_release
-        run: |
-          NEW_VERSION="${{ steps.next_version.outputs.NEW_VERSION }}"  # Get the new version from the output
-          if [ -f release_notes.md ]; then
-            RELEASE_NOTES=$(cat release_notes.md)  # Read release notes
-            gh release create "$NEW_VERSION" --notes "$RELEASE_NOTES" --title "Release $NEW_VERSION" --draft
+            NEW_VERSION="v6.0.3"  # Get the new version from the output
+            gh release create "$NEW_VERSION" --notes "$(cat release_notes.md)" --title "Release $NEW_VERSION" --draft
           else
             echo "release_notes.md file not found, skipping release creation"
           fi
