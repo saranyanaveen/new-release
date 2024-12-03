@@ -93,10 +93,12 @@ jobs:
             "## " + .category + "\n" + .notes
           ')
 
-          if [ -z "$RELEASE_NOTES" ]; then
-            echo "No release notes generated."
+          # Only create release_notes.md if notes were generated
+          if [ -n "$RELEASE_NOTES" ]; then
+            echo "$RELEASE_NOTES" > release_notes.md
+            echo "Release notes generated."
           else
-            echo "$RELEASE_NOTES" > release_notes.md  # Store release notes in a file
+            echo "No release notes generated."
           fi
 
       # Check if release_notes.md exists and create GitHub release
