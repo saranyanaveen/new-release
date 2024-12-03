@@ -89,8 +89,7 @@ jobs:
             .[] |
             "## " + .category + "\n" + .notes
           ')
-<<<<<<< HEAD
-=======
+
 
 
           # Only create release_notes.md if notes were generated
@@ -100,7 +99,7 @@ jobs:
           else
             echo "No release notes generated."
           fi
->>>>>>> ef947cc90210f8e07c01dba4ac599f8222a890cc
+
           echo "$categorized_data" > release_notes.md
           echo "Release notes generated and saved to release_notes.md."
 
