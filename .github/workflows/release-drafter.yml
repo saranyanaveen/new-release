@@ -1,7 +1,7 @@
 name: Create Release Notes
 on:
   pull_request:
-    types: [closed] # Triggers only when a pull request is closed
+    types: [closed] # Trigger only when a pull request is closed
     branches:
       - main
 
@@ -29,21 +29,22 @@ jobs:
       - name: Get PR Details
         id: pr_details
         run: |
-            PR_TITLE="${{ github.event.pull_request.title }}"
-            PR_BODY="${{ github.event.pull_request.body }}"
-            # Escape quotes in JSON for proper parsing
-            PR_LABELS=$(echo "${{ toJson(github.event.pull_request.labels) }}" | sed 's/\\/\\\\/g' | jq -r '.[].name')
-        
-            echo "PR_TITLE=$PR_TITLE" >> $GITHUB_ENV
-            echo "PR_BODY=$PR_BODY" >> $GITHUB_ENV
-            echo "PR_LABELS=$PR_LABELS" >> $GITHUB_ENV
-        
+          PR_TITLE="${{ github.event.pull_request.title }}"
+          PR_BODY="${{ github.event.pull_request.body }}"
+          
+          # Use GitHub-provided labels and parse them safely
+          PR_LABELS=$(echo '${{ toJson(github.event.pull_request.labels) }}' | jq -r '.[].name')
+
+          echo "PR_TITLE=$PR_TITLE" >> $GITHUB_ENV
+          echo "PR_BODY=$PR_BODY" >> $GITHUB_ENV
+          echo "PR_LABELS=$PR_LABELS" >> $GITHUB_ENV
+
       - name: Debug Output
         run: |
-            echo "Pull Request Title: $PR_TITLE"
-            echo "Pull Request Body: $PR_BODY"
-            echo "Labels: $PR_LABELS"
-        
+          echo "Pull Request Title: $PR_TITLE"
+          echo "Pull Request Body: $PR_BODY"
+          echo "Labels: $PR_LABELS"
+
       - name: Determine Version Bump
         id: bump_version
         run: |
@@ -96,7 +97,7 @@ jobs:
           PR_LABELS="${PR_LABELS:-No labels assigned.}"
           
           echo -e "## Release Notes\n" > release_notes.md
-          echo -e "### Pull Request Title\n${{ github.event.pull_request.title }}\n" >> release_notes.md
+          echo -e "### Pull Request Title\n${PR_TITLE}\n" >> release_notes.md
           echo -e "### Pull Request Description\n${PR_BODY}\n" >> release_notes.md
           echo -e "### Labels\n${PR_LABELS}\n" >> release_notes.md
           echo "Release notes generated."
