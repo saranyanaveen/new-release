@@ -107,11 +107,12 @@ jobs:
             fi
         
             if echo "$PR_LABELS" | grep -q "patch"; then
-              BUG_FIXES="${BUG_FIXES}\n- minor: ${PR_BODY}"
+
+              BUG_FIXES="${BUG_FIXES}\n- patch: ${PR_BODY}"
             fi
         
             if echo "$PR_LABELS" | grep -q "minor"; then
-              FEATURES="${FEATURES}\n- feature: ${PR_BODY}"
+              FEATURES="${FEATURES}\n- minor: ${PR_BODY}"
             fi
         
             # Write release notes
