@@ -121,3 +121,13 @@ jobs:
           echo "NEXT_MINOR=$NEXT_MINOR" >> $GITHUB_ENV
           echo "NEXT_PATCH=$NEXT_PATCH" >> $GITHUB_ENV
           echo "Version info saved: $NEXT_MAJOR.$NEXT_MINOR.$NEXT_PATCH"
+
+      - name: Create Draft Release on GitHub
+        run: |
+          # Create a draft release on GitHub using the generated release notes and version info
+          gh release create "v$NEXT_MAJOR.$NEXT_MINOR.$NEXT_PATCH" \
+            --repo <YOUR_GITHUB_REPO> \
+            --title "Release $NEXT_MAJOR.$NEXT_MINOR.$NEXT_PATCH" \
+            --notes-file release_notes.md \
+            --draft
+          echo "Draft release created with version v$NEXT_MAJOR.$NEXT_MINOR.$NEXT_PATCH"
