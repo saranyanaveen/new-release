@@ -93,8 +93,17 @@ jobs:
             "## " + .category + "\n" + .notes
           ')
 
+
+          # Only create release_notes.md if notes were generated
+          if [ -n "$RELEASE_NOTES" ]; then
+            echo "$RELEASE_NOTES" > release_notes.md
+            echo "Release notes generated."
+          else
+            echo "No release notes generated."
+          fi
           echo "$categorized_data" > release_notes.md
           echo "Release notes generated and saved to release_notes.md."
+
 
       - name: Check if tag exists
         run: |
