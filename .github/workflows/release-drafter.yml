@@ -1,5 +1,3 @@
-<<<<<<< HEAD
-=======
 name: Create Release Notes
 on:
   pull_request:
@@ -87,7 +85,6 @@ jobs:
 
       - name: Generate Release Notes
         run: |
-
           PR_BODY="${PR_BODY:-No description provided.}"
           PR_LABELS="${PR_LABELS:-No labels assigned.}"
           
@@ -97,49 +94,6 @@ jobs:
           echo -e "### Labels\n${PR_LABELS}\n" >> release_notes.md
           echo "Release notes generated."
 
-          pr_data=$(gh pr list --state merged --base main --json title,body,labels)
-          categorized_data=$(echo "$pr_data" | jq -r '
-            group_by(.labels | map(.name) | flatten | map(select(. == "feature" or . == "bug" or . == "breaking-change"))) |
-            map({
-              "category": (
-                if any(.labels[]?.name == "feature") then "Features"
-                elif any(.labels[]?.name == "bug") then "Bug Fixes"
-                elif any(.labels[]?.name == "breaking-change") then "Breaking Changes"
-                else "Other" end
-              ),
-              "notes": (map("\(.title): \n\(.body)") | unique | join("\n"))
-            }) |
-            .[] |
-            "## " + .category + "\n" + .notes
-          ')
-
-
-
-          # Only create release_notes.md if notes were generated
-          if [ -n "$RELEASE_NOTES" ]; then
-            echo "$RELEASE_NOTES" > release_notes.md
-            echo "Release notes generated."
-          else
-            echo "No release notes generated."
-          fi
-
-          echo "$categorized_data" > release_notes.md
-          echo "Release notes generated and saved to release_notes.md."
-
-
-      - name: Check if tag exists
-        run: |
-          TAG_EXISTS=$(git tag -l "v$NEXT_MAJOR.$NEXT_MINOR.$NEXT_PATCH")
-          if [ -n "$TAG_EXISTS" ]; then
-            echo "Tag v$NEXT_MAJOR.$NEXT_MINOR.$NEXT_PATCH already exists. Incrementing patch version..."
-            NEXT_PATCH=$((NEXT_PATCH + 1))
-            echo "New version: v$NEXT_MAJOR.$NEXT_MINOR.$NEXT_PATCH"
-          else
-            echo "Tag v$NEXT_MAJOR.$NEXT_MINOR.$NEXT_PATCH does not exist. Proceeding with the release."
-          fi
-          echo "NEXT_PATCH=$NEXT_PATCH" >> $GITHUB_ENV
-
-
       - name: Create Release
         run: |
           gh release create "$NEW_VERSION" release_notes.md \
@@ -147,4 +101,3 @@ jobs:
             --notes-file release_notes.md
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
->>>>>>> d58803651fbceba1e5a06ad218983a6baec4341a
