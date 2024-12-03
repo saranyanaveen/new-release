@@ -1,5 +1,3 @@
-<<<<<<< HEAD
-=======
 name: Create Release Notes
 on:
   pull_request:
@@ -147,4 +145,4 @@ jobs:
             --notes-file release_notes.md
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
->>>>>>> d58803651fbceba1e5a06ad218983a6baec4341a
+
