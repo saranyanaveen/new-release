@@ -83,7 +83,8 @@ jobs:
               "category": (
                 if any(.title | test("(?i)major")) then "Breaking Changes"
                 elif any(.title | test("(?i)minor")) then "Features"
-                elif any(.title | test("(?i)fix|bug|chore|maintenance")) then "Bug Fixes"
+                elif any(.title | test("(?i)fix|bug")) then "Bug Fixes"
+                elif any(.title | test("(?i)chore|maintenance")) then "Chores and Maintenance"
                 else "Other" end
               ),
               "notes": (map("\(.title): \n\(.body)") | unique | join("\n"))
@@ -91,6 +92,7 @@ jobs:
             .[] |
             "## " + .category + "\n" + .notes
           ')
+
           echo "$categorized_data" > release_notes.md
           echo "Release notes generated and saved to release_notes.md."
 
