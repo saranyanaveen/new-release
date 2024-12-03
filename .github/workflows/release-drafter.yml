@@ -125,12 +125,21 @@ jobs:
 
       # Debug Release Notes File
       - name: Debug Release Notes File
-        run: cat release_notes.md || echo "release_notes.md not found"
+        run: |
+          if [ -f release_notes.md ]; then
+            cat release_notes.md
+          else
+            echo "release_notes.md not found"
+          fi
 
       # Create a draft release with the new version and release notes
       - name: Create Draft Release
         id: create_draft_release
         run: |
           NEW_VERSION="${{ steps.next_version.outputs.NEW_VERSION }}"  # Get the new version from the output
-          RELEASE_NOTES=$(cat release_notes.md)  # Read release notes
-          gh release create "$NEW_VERSION" --notes "$RELEASE_NOTES" --title "Release $NEW_VERSION" --draft
+          if [ -f release_notes.md ]; then
+            RELEASE_NOTES=$(cat release_notes.md)  # Read release notes
+            gh release create "$NEW_VERSION" --notes "$RELEASE_NOTES" --title "Release $NEW_VERSION" --draft
+          else
+            echo "release_notes.md file not found, skipping release creation"
+          fi
