@@ -107,6 +107,7 @@ jobs:
             fi
         
             if echo "$PR_LABELS" | grep -q "patch"; then
+
               BUG_FIXES="${BUG_FIXES}\n- patch: ${PR_BODY}"
             fi
         
