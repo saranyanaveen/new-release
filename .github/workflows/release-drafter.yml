@@ -3,10 +3,10 @@ name: Create Release
 on:
   push:
     branches:
-      - main  # Trigger when code is pushed to the main branch
+      - main
   pull_request:
     branches:
-      - main  # Trigger when a PR is made targeting the main branch
+      - main
 
 jobs:
   release:
@@ -43,6 +43,10 @@ jobs:
           PR_DATA=$(gh pr list --state merged --base main --search "merged:>$LATEST_TAG" --json title,labels,body)
           echo "$PR_DATA" > pr_data.json
           echo "PR_DATA=$PR_DATA" >> $GITHUB_ENV  # Set as an environment variable for future steps
+
+      # Debug PR Data
+      - name: Debug PR Data
+        run: echo "$PR_DATA" || echo "No PR data available"
 
       # Determine the bump type using title and labels
       - name: Determine bump type
@@ -97,7 +101,6 @@ jobs:
       - name: Generate Release Notes
         id: release_notes
         if: github.event_name == 'push' && !contains(github.event.head_commit.message, '.github/workflows/')
-
         run: |
           PR_DATA=$(cat pr_data.json)
           RELEASE_NOTES=$(echo "$PR_DATA" | jq -r '
@@ -114,7 +117,15 @@ jobs:
             .[] |
             "## " + .category + "\n" + .notes
           ')
-          echo "$RELEASE_NOTES" > release_notes.md  # Store release notes in a file
+          if [ -z "$RELEASE_NOTES" ]; then
+            echo "No release notes generated."
+          else
+            echo "$RELEASE_NOTES" > release_notes.md  # Store release notes in a file
+          fi
+
+      # Debug Release Notes File
+      - name: Debug Release Notes File
+        run: cat release_notes.md || echo "release_notes.md not found"
 
       # Create a draft release with the new version and release notes
       - name: Create Draft Release
