@@ -1,0 +1,125 @@
+name: Create Release
+
+on:
+  push:
+    branches:
+      - main  # Trigger when code is pushed to the main branch
+  pull_request:
+    branches:
+      - main  # Trigger when a PR is made targeting the main branch
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      LATEST_TAG: "v0.0.0"  # Default value for latest tag (can be overwritten in steps)
+      
+    steps:
+      # Checkout the code
+      - name: Checkout code
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+
+      # Set up GitHub CLI and jq
+      - name: Set up GitHub CLI and jq
+        run: |
+          sudo apt update
+          sudo apt install -y gh jq
+          echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
+
+      # Get the latest release tag
+      - name: Get latest release tag
+        id: get_latest_release
+        run: |
+          LATEST_TAG=$(git tag --sort=-v:refname | head -n 1 || echo "v0.0.0")
+          echo "LATEST_TAG=$LATEST_TAG" >> $GITHUB_ENV  # Set as an environment variable for future steps
+
+      # Get merged PRs since the latest tag
+      - name: Get merged PRs since last release
+        id: pr_data
+        run: |
+          LATEST_TAG="${{ env.LATEST_TAG }}"  # Use the environment variable from previous step
+          PR_DATA=$(gh pr list --state merged --base main --search "merged:>$LATEST_TAG" --json title,labels,body)
+          echo "$PR_DATA" > pr_data.json
+          echo "PR_DATA=$PR_DATA" >> $GITHUB_ENV  # Set as an environment variable for future steps
+
+      # Determine the bump type using title and labels
+      - name: Determine bump type
+        id: bump_type
+        run: |
+          PR_DATA=$(cat pr_data.json)
+          BUMP_TYPE="patch"  # Default bump type
+
+          if echo "$PR_DATA" | jq -e '.[] | select(.title | test("\\bmajor\\b"))' >/dev/null; then
+              BUMP_TYPE="major"
+          elif echo "$PR_DATA" | jq -e '.[] | select(.title | test("\\bminor\\b"))' >/dev/null; then
+              BUMP_TYPE="minor"
+          elif echo "$PR_DATA" | jq -e '.[] | select(.title | test("\\bpatch\\b"))' >/dev/null; then
+              BUMP_TYPE="patch"
+          else
+              if echo "$PR_DATA" | jq -e '.[] | select(.labels[]?.name == "major" or .labels[]?.name == "breaking-change")' >/dev/null; then
+                  BUMP_TYPE="major"
+              elif echo "$PR_DATA" | jq -e '.[] | select(.labels[]?.name == "minor" or .labels[]?.name == "feature" or .labels[]?.name == "enhancement")' >/dev/null; then
+                  BUMP_TYPE="minor"
+              elif echo "$PR_DATA" | jq -e '.[] | select(.labels[]?.name == "patch" or .labels[]?.name == "fix" or .labels[]?.name == "bug")' >/dev/null; then
+                  BUMP_TYPE="patch"
+              fi
+          fi
+
+          echo "BUMP_TYPE=$BUMP_TYPE" >> $GITHUB_OUTPUT  # Output the bump type for use in future steps
+
+      # Calculate next version
+      - name: Calculate next version
+        id: next_version
+        run: |
+          LATEST_TAG="${{ env.LATEST_TAG }}"  # Access the latest tag from the environment variable
+          BUMP_TYPE="${{ steps.bump_type.outputs.BUMP_TYPE }}"  # Access the bump type output
+          
+          VERSION=${LATEST_TAG#v}
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
+
+          if [ "$BUMP_TYPE" = "major" ]; then
+            MAJOR=$((MAJOR + 1))
+            MINOR=0
+            PATCH=0
+          elif [ "$BUMP_TYPE" = "minor" ]; then
+            MINOR=$((MINOR + 1))
+            PATCH=0
+          else
+            PATCH=$((PATCH + 1))
+          fi
+
+          NEW_VERSION="v$MAJOR.$MINOR.$PATCH"
+          echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_OUTPUT  # Set the new version as output
+
+      # Generate release notes for PRs since the last tag, but only if it's not an update to the workflow
+      - name: Generate Release Notes
+        id: release_notes
+        if: github.event_name == 'push' && !contains(github.event.head_commit.message, '.github/workflows/')
+
+        run: |
+          PR_DATA=$(cat pr_data.json)
+          RELEASE_NOTES=$(echo "$PR_DATA" | jq -r '
+            group_by(.labels | map(.name) | flatten | map(select(. == "feature" or . == "bug" or . == "breaking-change"))) |
+            map({
+              "category": (
+                if any(.labels[]?.name == "feature") then "Features"
+                elif any(.labels[]?.name == "bug") then "Bug Fixes"
+                elif any(.labels[]?.name == "breaking-change") then "Breaking Changes"
+                else "Other" end
+              ),
+              "notes": (map("\(.title): \(.body)") | join("\n"))
+            }) |
+            .[] |
+            "## " + .category + "\n" + .notes
+          ')
+          echo "$RELEASE_NOTES" > release_notes.md  # Store release notes in a file
+
+      # Create a draft release with the new version and release notes
+      - name: Create Draft Release
+        id: create_draft_release
+        run: |
+          NEW_VERSION="${{ steps.next_version.outputs.NEW_VERSION }}"  # Get the new version from the output
+          RELEASE_NOTES=$(cat release_notes.md)  # Read release notes
+          gh release create "$NEW_VERSION" --notes "$RELEASE_NOTES" --title "Release $NEW_VERSION" --draft
