@@ -1,134 +1,132 @@
----
-    name: Create Release Notes
-    on:
-      pull_request:
-        types:
-          - closed
-        branches:
-          - main
-    jobs:
-      release:
-        if: github.event.pull_request.merged == true
-        runs-on: ubuntu-latest
-        steps:
-          - name: Checkout code
-            uses: actions/checkout@v2
-            with:
-              fetch-depth: 0
-          - name: Set up GitHub CLI
-            run: |
-              sudo apt update
-              sudo apt install -y gh
-              echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
-          - name: Install jq
-            run: |
-              sudo apt-get update
-              sudo apt-get install -y jq
-          - name: Get PR Details
-            id: pr_details
-            run: >
-              PR_TITLE="${{ github.event.pull_request.title }}"
-    
-              PR_BODY="${{ github.event.pull_request.body }}"
-    
-    
-              # Use GitHub-provided labels and parse them safely
-    
-              PR_LABELS=$(echo '${{ toJson(github.event.pull_request.labels) }}' | jq -r '.[].name')
-    
-    
-              echo "PR_TITLE=$PR_TITLE" >> $GITHUB_ENV
-    
-              echo "PR_BODY=$PR_BODY" >> $GITHUB_ENV
-    
-              echo "PR_LABELS=$PR_LABELS" >> $GITHUB_ENV
-          - name: Debug Output
-            run: |
-              echo "Pull Request Title: $PR_TITLE"
-              echo "Pull Request Body: $PR_BODY"
-              echo "Labels: $PR_LABELS"
-          - name: Determine Version Bump
-            id: bump_version
-            run: >
-              # Default version bump type
-    
-              BUMP_TYPE="patch"
-    
-    
-              # Check PR title or labels for bump type
-    
-              if [[ "$PR_TITLE" == *"major"* ]] || echo "$PR_LABELS" | grep -q "major"; then
-                BUMP_TYPE="major"
-              elif [[ "$PR_TITLE" == *"minor"* ]] || echo "$PR_LABELS" | grep -q "minor"; then
-                BUMP_TYPE="minor"
-              fi
-    
-    
-              echo "Version bump type: $BUMP_TYPE"
-    
-              echo "BUMP_TYPE=$BUMP_TYPE" >> $GITHUB_ENV
-          - name: Get Latest Tag
-            id: get_latest_tag
-            run: |
-              LATEST_TAG=$(git tag --sort=-v:refname | head -n 1 || echo "v0.0.0")
-              VERSION=${LATEST_TAG#v}
-              echo "Latest tag: $LATEST_TAG"
-    
-              IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
-              echo "MAJOR=$MAJOR" >> $GITHUB_ENV
-              echo "MINOR=$MINOR" >> $GITHUB_ENV
-              echo "PATCH=$PATCH" >> $GITHUB_ENV
-          - name: Increment Version
-            id: increment_version
-            run: |
-              if [ "$BUMP_TYPE" == "major" ]; then
-                MAJOR=$((MAJOR + 1))
-                MINOR=0
-                PATCH=0
-              elif [ "$BUMP_TYPE" == "minor" ]; then
-                MINOR=$((MINOR + 1))
-                PATCH=0
-              else
-                PATCH=$((PATCH + 1))
-              fi
-    
-              NEW_VERSION="v$MAJOR.$MINOR.$PATCH"
-              echo "New version: $NEW_VERSION"
-              echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_ENV
-          - name: Generate Release Notes
-            run: |
-              PR_BODY="${PR_BODY:-No description provided.}"
-              PR_LABELS="${PR_LABELS:-No labels assigned.}"
-    
-              # Initialize categories
-              OTHER_CHANGES=""
-              BUG_FIXES=""
-              FEATURES=""
-    
-              # Check for labels and categorize changes
-              if echo "$PR_LABELS" | grep -q "major"; then
-                OTHER_CHANGES="${OTHER_CHANGES}\n- major: ${PR_BODY}"
-              fi
-    
-              if echo "$PR_LABELS" | grep -q "minor"; then
-                BUG_FIXES="${BUG_FIXES}\n- minor: ${PR_BODY}"
-              fi
-    
-              if echo "$PR_LABELS" | grep -q "feature"; then
-                FEATURES="${FEATURES}\n- feature: ${PR_BODY}"
-              fi
-    
-              # Write release notes
-              echo -e "## Release v${NEW_VERSION}\n" > release_notes.md
-              echo -e "### Other\n$OTHER_CHANGES\n" >> release_notes.md
-              echo -e "### Bug Fixes\n$BUG_FIXES\n" >> release_notes.md
-              echo -e "### Features\n$FEATURES\n" >> release_notes.md
-              echo "Release notes generated."
-          - name: Create Release
-            run: |
-              gh release create "$NEW_VERSION" release_notes.md \
-                --title "Release $NEW_VERSION" \
-                --notes-file release_notes.md
-            env:
-              GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-    
+name: Create Release Notes
+on:
+  pull_request:
+    types: [closed] # Trigger only when a pull request is closed
+    branches:
+      - main
+
+jobs:
+  release:
+    if: github.event.pull_request.merged == true # Run only for merged PRs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+
+      - name: Set up GitHub CLI
+        run: |
+          sudo apt update
+          sudo apt install -y gh
+          echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
+
+      - name: Install jq
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq
+
+      - name: Get PR Details
+        id: pr_details
+        run: |
+          PR_TITLE="${{ github.event.pull_request.title }}"
+          PR_BODY="${{ github.event.pull_request.body }}"
+          
+          # Use GitHub-provided labels and parse them safely
+          PR_LABELS=$(echo '${{ toJson(github.event.pull_request.labels) }}' | jq -r '.[].name')
+
+          echo "PR_TITLE=$PR_TITLE" >> $GITHUB_ENV
+          echo "PR_BODY=$PR_BODY" >> $GITHUB_ENV
+          echo "PR_LABELS=$PR_LABELS" >> $GITHUB_ENV
+
+      - name: Debug Output
+        run: |
+          echo "Pull Request Title: $PR_TITLE"
+          echo "Pull Request Body: $PR_BODY"
+          echo "Labels: $PR_LABELS"
+
+      - name: Determine Version Bump
+        id: bump_version
+        run: |
+          # Default version bump type
+          BUMP_TYPE="patch"
+
+          # Check PR title or labels for bump type
+          if [[ "$PR_TITLE" == *"major"* ]] || echo "$PR_LABELS" | grep -q "major"; then
+            BUMP_TYPE="major"
+          elif [[ "$PR_TITLE" == *"minor"* ]] || echo "$PR_LABELS" | grep -q "minor"; then
+            BUMP_TYPE="minor"
+          fi
+
+          echo "Version bump type: $BUMP_TYPE"
+          echo "BUMP_TYPE=$BUMP_TYPE" >> $GITHUB_ENV
+
+      - name: Get Latest Tag
+        id: get_latest_tag
+        run: |
+          LATEST_TAG=$(git tag --sort=-v:refname | head -n 1 || echo "v0.0.0")
+          VERSION=${LATEST_TAG#v}
+          echo "Latest tag: $LATEST_TAG"
+
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
+          echo "MAJOR=$MAJOR" >> $GITHUB_ENV
+          echo "MINOR=$MINOR" >> $GITHUB_ENV
+          echo "PATCH=$PATCH" >> $GITHUB_ENV
+
+      - name: Increment Version
+        id: increment_version
+        run: |
+          if [ "$BUMP_TYPE" == "major" ]; then
+            MAJOR=$((MAJOR + 1))
+            MINOR=0
+            PATCH=0
+          elif [ "$BUMP_TYPE" == "minor" ]; then
+            MINOR=$((MINOR + 1))
+            PATCH=0
+          else
+            PATCH=$((PATCH + 1))
+          fi
+
+          NEW_VERSION="v$MAJOR.$MINOR.$PATCH"
+          echo "New version: $NEW_VERSION"
+          echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_ENV
+
+      - name: Generate Release Notes
+        run: |
+            PR_BODY="${PR_BODY:-No description provided.}"
+            PR_LABELS="${PR_LABELS:-No labels assigned.}"
+            
+            # Initialize categories
+            OTHER_CHANGES=""
+            BUG_FIXES=""
+            FEATURES=""
+        
+            # Check for labels and categorize changes
+            if echo "$PR_LABELS" | grep -q "major"; then
+              OTHER_CHANGES="${OTHER_CHANGES}\n- major: ${PR_BODY}"
+            fi
+        
+            if echo "$PR_LABELS" | grep -q "patch"; then
+              BUG_FIXES="${BUG_FIXES}\n- patch: ${PR_BODY}"
+            fi
+        
+            if echo "$PR_LABELS" | grep -q "minor"; then
+              FEATURES="${FEATURES}\n- minor: ${PR_BODY}"
+            fi
+        
+            # Write release notes
+            echo -e "## Release v${NEW_VERSION}\n" > release_notes.md
+            echo -e "### Other changes\n$OTHER_CHANGES\n" >> release_notes.md
+            echo -e "### Bug Fixes\n$BUG_FIXES\n" >> release_notes.md
+            echo -e "### Features\n$FEATURES\n" >> release_notes.md
+            echo "Release notes generated."
+        
+        
+
+      - name: Create Release
+        run: |
+          gh release create "$NEW_VERSION" release_notes.md \
+            --title "Release $NEW_VERSION" \
+            --notes-file release_notes.md
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
