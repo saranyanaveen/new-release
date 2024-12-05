@@ -74,6 +74,7 @@
             elif [[ "$PR_LABELS" == *"patch"* ]]; then
               PATCH=$((PATCH + 1))
             fi
+<<<<<<< HEAD
             NEW_VERSION="v$MAJOR.$MINOR.$PATCH"
             echo "New version: $NEW_VERSION"
             echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_ENV
@@ -161,6 +162,12 @@
   
             if [ -n "$FEATURE_COMMENTS" ]; then
               echo -e "### Feature:\n$FEATURE_COMMENTS" >> release_notes.md
+=======
+        
+            if echo "$PR_LABELS" | grep -q "patch"; then
+
+              BUG_FIXES="${BUG_FIXES}\n- patch: ${PR_BODY}"
+>>>>>>> 1075d0ff81eecb8992cbbfdef15ed0492bff0aa5
             fi
   
             if [ -n "$BUG_COMMENTS" ]; then
